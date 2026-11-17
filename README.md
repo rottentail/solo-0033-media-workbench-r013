@@ -489,18 +489,26 @@ assembled programme. Section order resolves equal-quality ties.
 `overlap_ms` (0–2000), and allowed `starts` and `ends` names. The uniform
 overlap must not exceed half any phrase. A complete route of at most twelve
 uses maximizes summed phrase scores minus join costs, respecting all use
-limits and openings/closings. Equal scores prefer fewer uses, then the
+limits and openings/closings. The search is global over the whole route, not
+greedy: a phrase that is best for the next slot never spends a use that the
+required closing needs. Equal scores prefer fewer uses, then the
 lexicographically earliest catalogue-index sequence. No stretching, trimming,
 silent padding or partial plans are allowed; infeasible requests fail before
-persistence. Both the catalogue and chosen schedule are frozen in the plan.
+persistence. Both the catalogue and chosen schedule are frozen in the plan,
+and every saved use keeps its own phrase name, source cut and gain even when
+several catalogue sections select the same original recording.
 
 `GET /music-plans/{id}` inspects the result. `/render` and `/audition` accept
 `destination`, optional `at_sample`, `samples`, `block_frames` (1–16384) and
 write float stereo 48 kHz WAV. Each interior join uses cosine outgoing and
 sine incoming equal-power weights over the exact overlap, preserving each
 phrase's source cut, channels and gain without normalization or limiting.
-Auditions are exact slices of the full output even inside joins. Each distinct
-selected source decodes once to disk; repeated uses seek within that spool.
-Memory stays bounded by the output block, source relocation remains supported,
-changed originals are refused, existing destinations are protected, and private
-spools disappear on failure. Catalogue or timeline edits do not change saved plans.
+The weights are evaluated at absolute programme positions, so auditions are
+exact slices of the full output even inside joins and a different
+`block_frames` changes only I/O granularity. Each distinct original decodes
+once, sequentially, into a private spool covering the union of the selected
+phrase windows; repeated uses and sibling sections seek within that spool and
+never re-read the slow original. Memory stays bounded by the output block,
+source relocation remains supported, changed originals are refused, existing
+destinations are protected, and private spools disappear on failure. Catalogue
+or timeline edits do not change saved plans.

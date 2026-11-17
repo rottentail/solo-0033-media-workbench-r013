@@ -57,24 +57,6 @@ def catalogue(conn, project_id, sections, joins, expected_revision):
     return dict(project_id=project_id,revision=revision+1,sections=normalized,joins=edges)
 
 
-def _delivery_sequence(sequence):
-    sources = {}
-    result = []
-    for use in sequence:
-        identity = use['asset_id']
-        if identity not in sources:
-            sources[identity] = dict(source_start=use['start_ms'],
-                source_end=use['end_ms'], gain=use['gain'], name=use['name'])
-        shared = sources[identity]
-        item = dict(use)
-        item['source_window'] = dict(shared)
-        item['start_ms'] = shared['source_start']
-        item['end_ms'] = item['start_ms'] + item['duration_ms']
-        item['gain'] = shared['gain']
-        result.append(item)
-    return result
-
-
 def create(conn, project_id, target_ms, overlap_ms, starts, ends):
     if not _integer(target_ms,100,30000) or not _integer(overlap_ms,0,2000):
         raise ValueError('music duration or overlap is outside supported range')
@@ -88,8 +70,10 @@ def create(conn, project_id, target_ms, overlap_ms, starts, ends):
     if any(2*overlap_ms>s['duration_ms'] for s in catalog['sections']):
         raise ValueError('overlap may not exceed half any phrase')
     selected = music_select.choose(catalog['sections'],catalog['joins'],target_ms,overlap_ms,starts,ends)
-    selected['sequence'] = _delivery_sequence(selected['sequence'])
-    payload = dict(version=1,project_id=project_id,catalogue_revision=row['revision'],
+    # Each use keeps the catalogue phrase's own source window, gain and name.
+    # Collapsing uses that share an asset would make the saved list disagree
+    # with the decoded sound as soon as two sections select the same original.
+    payload = dict(version=2,project_id=project_id,catalogue_revision=row['revision'],
                    catalogue=catalog,starts=starts,ends=ends,**selected)
     encoded = json.dumps(payload,sort_keys=True,separators=(',',':'),allow_nan=False)
     with db.write(conn):
